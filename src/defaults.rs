@@ -1,4 +1,4 @@
-pub const DATABASE_INTEGRITY_CHECK: u32 = 0x00ABCDEF;
+pub const DATABASE_INTEGRITY_CODE: u32 = 0x00ABCDEF;
 pub const VERSION: u32 = 1;
 // Minimum number of bytes to allocate when growing the databse
 pub(crate) const MIN_ALLOC_SIZE: u64 = 8 * 1024 * 1024;

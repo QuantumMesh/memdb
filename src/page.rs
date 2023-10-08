@@ -1,3 +1,5 @@
+use crate::meta::Meta;
+
 pub(crate) type PageID = u64;
 
 pub(crate) type PageType = u8;
@@ -21,4 +23,14 @@ impl Page {
     pub(crate) const TYPE_LEAF: PageType = 0x02;
     pub(crate) const TYPE_META: PageType = 0x03;
     pub(crate) const TYPE_FREELIST: PageType = 0x04;
+
+    pub(crate) fn meta(&self) -> &Meta {
+        assert_eq!(self.page_type, Page::TYPE_META);
+        unsafe { &*(&self.ptr as *const u64 as *const Meta) }
+    }
+
+    pub(crate) fn meta_mut(&mut self) -> &mut Meta {
+        assert_eq!(self.page_type, Page::TYPE_META);
+        unsafe { &mut *(&mut self.ptr as *mut u64 as *mut Meta) }
+    }
 }

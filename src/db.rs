@@ -11,7 +11,7 @@ use fs2::FileExt;
 use page_size::get as get_page_size;
 
 use crate::bucket::BucketMeta;
-use crate::defaults::{DATABASE_INTEGRITY_CHECK, DEFAULT_NUM_PAGES, VERSION};
+use crate::defaults::{DATABASE_INTEGRITY_CODE, DEFAULT_NUM_PAGES, VERSION};
 use crate::errors::Result;
 use crate::page::Page;
 
@@ -191,7 +191,7 @@ fn init_file(path: &Path, pagesize: u64, num_pages: usize, direct_write: bool) -
         page.page_type = Page::TYPE_META;
         let m = page.meta_mut();
         m.meta_page = i as u32;
-        m.magic = DATABASE_INTEGRITY_CHECK;
+        m.integrity_code = DATABASE_INTEGRITY_CODE;
         m.version = VERSION;
         m.pagesize = pagesize;
         m.freelist_page = 2;

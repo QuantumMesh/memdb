@@ -3,6 +3,7 @@ pub mod defaults;
 pub mod errors;
 mod page;
 mod bucket;
+mod meta;
 
 pub fn add(left: usize, right: usize) -> usize {
     left + right

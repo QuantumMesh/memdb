@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 use fs2::FileExt;
 use page_size::get as get_page_size;
+use parking_lot::{Mutex, RwLock};
 
 use crate::bucket::BucketMeta;
 use crate::defaults::{DATABASE_INTEGRITY_CODE, DEFAULT_NUM_PAGES, VERSION};
@@ -102,7 +103,10 @@ impl DBOpenOptions {
         } else {
             open_file(path, false, self.flags.direct_writes)?
         };
-        todo!("DBInner::open")
+        let db = DBInner::open(file, self.page_size, self.flags)?;
+        Ok(DB {
+            inner: Arc::new(db),
+        })
     }
 }
 
@@ -136,6 +140,18 @@ impl Default for DBOpenOptions {
         }
     }
 }
+
+pub(crate) struct DBInner {
+    pub(crate) data: Mutex<Arc<Mmap>>,
+    pub(crate) mmap_lock: RwLock<()>,
+    pub(crate) freelist: Mutex<Freelist>,
+    pub(crate) file: Mutex<File>,
+    pub(crate) open_ro_txs: Mutex<Vec<u64>>,
+    pub(crate) flags: DBFlags,
+
+    pub(crate) pagesize: u64,
+}
+
 
 
 /// The `O_DIRECT` flag is a hint to the kernel that the mapped pages should be faulted in (i.e., loaded into memory) immediately, rather than being loaded later on-demand.

@@ -4,6 +4,7 @@ pub mod errors;
 mod page;
 mod bucket;
 mod meta;
+mod freelist;
 
 pub fn add(left: usize, right: usize) -> usize {
     left + right

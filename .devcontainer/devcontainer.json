@@ -1,0 +1,27 @@
+{
+	"name": "Codespaces Rust Starter",
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"cschleiden.vscode-github-actions",
+				"ms-vsliveshare.vsliveshare",
+				"matklad.rust-analyzer",
+				"serayuzgur.crates",
+				"vadimcn.vscode-lldb",
+				"dnamsons.kimbie-dark-plus"
+			],
+			"settings": {
+				"editor.formatOnSave": true,
+				"terminal.integrated.shell.linux": "/usr/bin/zsh",
+				"workbench.colorTheme": "Kimbie Dark+",
+				"editor.mouseWheelZoom": true,
+				"files.exclude": {
+					"**/CODE_OF_CONDUCT.md": true,
+					"**/LICENSE": true
+				},
+				"editor.fontSize": 16
+			}
+		}
+	},
+	"dockerFile": "Dockerfile"
+}

@@ -1,9 +1,14 @@
 use std::cell::RefCell;
 use std::fs::File;
+use std::rc::Rc;
 use parking_lot::{MutexGuard, RwLockReadGuard};
+use crate::bucket::InnerBucket;
 
 use crate::db::DB;
 use crate::errors::Result;
+use crate::freelist::TxFreelist;
+use crate::meta::Meta;
+use crate::page::Pages;
 
 pub(crate) enum TxLock<'tx> {
     Rw(MutexGuard<'tx, File>),
@@ -35,6 +40,13 @@ pub(crate) struct TxInner<'tx> {
 
 impl <'tx> Tx<'tx> {
     pub(crate) fn new(db: &'tx DB, writable: bool) -> Result<Tx<'tx>> {
-        todo!("")
+        let lock = match writable {
+            true => TxLock::Rw(db.inner.file.lock()),
+            false => TxLock::Ro(db.inner.mmap_lock.read()),
+        };
+
+        let mut freelist = db.inner.freelist.lock().clone();
+        let mut meta = db.inner.meta();
+        todo!()
     }
 }

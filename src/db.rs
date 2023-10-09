@@ -1,13 +1,16 @@
 use std::path::Path;
 use std::sync::Arc;
 
+use crate::context::Context;
 use crate::errors::Result;
 use crate::inner::Inner;
 use crate::options::Options;
 use crate::transaction::Tx;
 
 #[derive(Clone)]
+#[doc(alias = "database")]
 pub struct DB {
+    pub context: Context,
     pub(crate) inner: Arc<Inner>,
 }
 
@@ -23,5 +26,4 @@ impl DB {
     pub fn pagesize(&self) -> u64 {
         self.inner.pagesize
     }
-
 }

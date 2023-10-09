@@ -5,6 +5,10 @@ mod page;
 mod bucket;
 mod meta;
 mod freelist;
+mod config;
+mod options;
+mod transaction;
+mod inner;
 
 pub fn add(left: usize, right: usize) -> usize {
     left + right

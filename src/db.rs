@@ -1,6 +1,7 @@
 use std::path::Path;
 use std::sync::Arc;
 
+use crate::config::running_config::RunningConfig;
 use crate::context::Context;
 use crate::errors::Result;
 use crate::inner::Inner;
@@ -24,6 +25,10 @@ impl DB {
         Tx::new(self, writable)
     }
     pub fn pagesize(&self) -> u64 {
-        self.inner.pagesize
+        todo!()
+    }
+
+    pub(crate) fn start_inner(config: RunningConfig) -> Result<Self> {
+        todo!()
     }
 }

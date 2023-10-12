@@ -15,13 +15,16 @@ pub enum Error {
     /// Tried to write to a read only transaction
     ReadOnlyTx,
     /// Wrapper around a [`std::io::Error`] that occurred while opening the file or writing to it
-    Io(std::io::Error),
+    Io(std::io::ErrorKind, &'static str),
     /// Wrapper around a [`PoisonError`]
     Sync(&'static str),
     /// Error returned when the DB is found to be in an invalid state
     InvalidDB(String),
     /// Errors that can occur during allocation
     Alloc(std::alloc::LayoutError),
+
+    /// Unsupported operation
+    Unsupported(&'static str),
 }
 
 impl StdError for Error {}
@@ -38,6 +41,7 @@ impl fmt::Display for Error {
             Error::Sync(s) => write!(f, "Sync Error: {}", s),
             Error::InvalidDB(s) => write!(f, "Invalid DB: {}", s),
             Error::Alloc(e) => write!(f, "Allocation error: {}", e),
+            Error::Unsupported(s) => write!(f, "Unsupported operation: {}", s),
         }
     }
 }
@@ -70,6 +74,7 @@ impl PartialEq for Error {
             (Error::ReadOnlyTx, Error::ReadOnlyTx) => true,
             (Error::Sync(s1), Error::Sync(s2)) => s1 == s2,
             (Error::InvalidDB(s1), Error::InvalidDB(s2)) => s1 == s2,
+            (Error::Unsupported(s1), Error::Unsupported(s2)) => s1 == s2,
             _ => false,
         }
     }

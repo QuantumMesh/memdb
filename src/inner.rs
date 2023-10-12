@@ -1,152 +1,92 @@
-use std::fs::File;
-use std::sync::Arc;
+use std::fmt::Debug;
+use std::path::PathBuf;
 
-use fs2::FileExt;
-use memmap2::Mmap;
-use parking_lot::{Mutex, RwLock};
+use crate::config::{Config, Mode};
+use crate::config::flags::DBFlags;
 
-use crate::config::DBFlags;
-use crate::errors::Result;
-use crate::freelist::Freelist;
-use crate::meta::Meta;
-use crate::page::Page;
+const DEFAULT_PATH: &str = "default.db";
 
+#[derive(Debug, Clone)]
 pub(crate) struct Inner {
-    pub(crate) data: Mutex<Arc<Mmap>>,
-    pub(crate) mmap_lock: RwLock<()>,
-    pub(crate) freelist: Mutex<Freelist>,
-    pub(crate) file: Mutex<File>,
-    pub(crate) open_ro_txs: Mutex<Vec<u64>>,
+    pub cache_capacity: usize,
+    pub flush_every_ms: Option<u64>,
+    pub segment_size: usize,
+    pub mode: Mode,
+    pub path: PathBuf,
+    pub temporary: bool,
+    tmp_path: PathBuf,
+    pub create_new: bool,
+    pub snapshot_after_ops: u64,
+    pub version: (usize, usize),
+    // TODO: Event log handler for debugging
     pub(crate) flags: DBFlags,
 
-    pub(crate) pagesize: u64,
+}
+
+impl Default for Inner {
+    fn default() -> Self {
+        Self {
+            path: PathBuf::from(DEFAULT_PATH),
+            tmp_path: Config::gen_temp_path(),
+            cache_capacity: 1024 * 1024 * 1024, // 1gb
+            mode: Mode::LowSpace,
+            temporary: false,
+            version: crate_version(),
+
+            // useful in testing
+            segment_size: 512 * 1024, // 512kb in bytes
+            flush_every_ms: Some(500),
+            snapshot_after_ops: if cfg!(feature = "for-internal-testing-only") {
+                10
+            } else {
+                1_000_000
+            },
+            flags: DBFlags {
+                strict_mode: false,
+                mmap_populate: false,
+                direct_writes: false,
+            },
+            create_new: false,
+        }
+    }
 }
 
 
 impl Inner {
-    pub(crate) fn open(file: File, pagesize: u64, flags: DBFlags) -> Result<Inner> {
-        file.lock_exclusive()?;
-        let mmap = mmap(&file, flags.mmap_populate)?;
-
-        let mmap = Mutex::new(Arc::new(mmap));
-        let db = Inner {
-            data: mmap,
-            mmap_lock: RwLock::new(()),
-            freelist: Mutex::new(Freelist::new()),
-            file: Mutex::new(file),
-            open_ro_txs: Mutex::new(Vec::new()),
-            flags,
-            pagesize,
-        };
-
-        {
-            let meta = db.meta()?;
-            let data = db.data.lock();
-            let free_pages = Page::from_buf(
-                &data,
-                meta.freelist_page,
-                pagesize,
-            ).freelist();
-
-            if !free_pages.is_empty() {
-                db.freelist.lock().init(free_pages);
-            }
+    pub fn get_path(&self) -> PathBuf {
+        if self.temporary && self.path == PathBuf::from(DEFAULT_PATH) {
+            self.tmp_path.clone()
+        } else {
+            self.path.clone()
         }
-
-        Ok(db)
     }
 
-    pub(crate) fn resize(&self, file: &File, new_size: u64) -> Result<Arc<Mmap>> {
-        file.allocate(new_size)?;
-        let lock = self.mmap_lock.write();
-        let mut data = self.data.lock();
-        let mmap = mmap(file, self.flags.mmap_populate)?;
-        *data = Arc::new(mmap);
-        drop(lock);
-        Ok(data.clone())
+    pub(crate) fn db_path(&self) -> PathBuf {
+        self.get_path().join("db")
     }
 
-    pub(crate) fn meta(&self) -> Result<Meta> {
-        let data = self.data.lock();
+    fn config_path(&self) -> PathBuf {
+        self.get_path().join("conf")
+    }
 
-        // meta_1 and meta_2 are the two meta pages. We only need to read two
-        // and identify which one is the most recent.
-        let meta_1 = Page::from_buf(&data, 0, self.pagesize).meta();
-        if meta_1.valid() && meta_1.pagesize != self.pagesize {
-            assert_eq!(meta_1.pagesize, self.pagesize, "Invalid pagesize from meta_1 {}. Expected {}.", meta_1.pagesize, self.pagesize);
-        }
-        let meta_2 = Page::from_buf(&data, 1, self.pagesize).meta();
-        let meta = match (meta_1.valid(), meta_2.valid()) {
-            (true, true) => {
-                assert_eq!(
-                    meta_1.pagesize, self.pagesize,
-                    "Invalid pagesize from meta1 {}. Expected {}.",
-                    meta_1.pagesize, self.pagesize
-                );
-
-                assert_eq!(
-                    meta_2.pagesize, self.pagesize,
-                    "Invalid pagesize from meta2 {}. Expected {}.",
-                    meta_2.pagesize, self.pagesize
-                );
-
-                if meta_1.tx_id > meta_2.tx_id {
-                    meta_1
-                } else {
-                    meta_2
-                }
-            }
-            (true, false) => {
-                assert_eq!(
-                    meta_1.pagesize, self.pagesize,
-                    "Invalid pagesize from meta1 {}. Expected {}.",
-                    meta_1.pagesize, self.pagesize
-                );
-                meta_1
-            }
-            (false, true) => {
-                assert_eq!(
-                    meta_2.pagesize, self.pagesize,
-                    "Invalid pagesize from meta2 {}. Expected {}.",
-                    meta_2.pagesize, self.pagesize
-                );
-                meta_2
-            }
-            (false, false) => panic!("Invalid meta pages"),
-        };
-        Ok(meta.clone())
+    pub(crate) fn normalize<T>(&self, value: T) -> T
+        where
+            T: Copy
+            + TryFrom<usize>
+            + std::ops::Div<Output=T>
+            + std::ops::Mul<Output=T>,
+            <T as TryFrom<usize>>::Error: Debug,
+    {
+        let segment_size: T = T::try_from(self.segment_size).unwrap();
+        value / segment_size * segment_size
     }
 }
 
-#[cfg(unix)]
-fn mmap(file: &File, populate: bool) -> Result<Mmap> {
-    use memmap2::MmapOptions;
-    let mut opts = MmapOptions::new();
-    if populate {
-        opts.populate();
-    }
-    let mmap = unsafe { opts.map(file)? };
-    // On Unix we advice the OS that page access will be random.
-    mmap.advise(memmap2::Advice::Random)?;
-    Ok(mmap)
-}
 
-mod tests {
-    use crate::inner::mmap;
-
-    #[test]
-    fn test_mmap() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("test.db");
-        let file = std::fs::OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .open(&path)
-            .unwrap();
-        let mmap = mmap(&file, true).unwrap();
-        dbg!(mmap);
-
-        dbg!(file.metadata().unwrap().len());
-    }
+fn crate_version() -> (usize, usize) {
+    let vsn = env!("CARGO_PKG_VERSION");
+    let mut parts = vsn.split('.');
+    let major = parts.next().unwrap().parse().unwrap();
+    let minor = parts.next().unwrap().parse().unwrap();
+    (major, minor)
 }

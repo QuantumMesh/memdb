@@ -11,7 +11,7 @@ use log::error;
 use page_size::get as get_page_size;
 
 use crate::bucket::BucketMeta;
-use crate::config::{DBFlags};
+use crate::config::flags::{DBFlags};
 use crate::db::DB;
 use crate::defaults::{DATABASE_INTEGRITY_CODE, DEFAULT_NUM_PAGES, VERSION};
 use crate::errors::Result;
